@@ -1,0 +1,291 @@
+#!/usr/bin/env bash
+
+# --- Metadata ---
+VERSION="1.1.2"
+COPYRIGHT="Copyright (c) 2025 Virkkunen.  All rights reserved."
+LICENSE="Apache-2.0 License"
+
+# --- Colour And Formatting Definitions ---
+bold="\033[1m"
+reset_format="\033[0m"
+green="\033[32m"
+red="\033[31m"
+orange="\033[33m"
+grey="\033[38;5;240m"
+reset_colour="\033[0m"
+
+# --- Usage/Help Function ---
+usage() {
+  cat <<EOF
+Usage:  notisend [options] <command> [command arguments]
+
+Sends a notification via ntfy after a command completes
+
+Options:
+  -h, --help        Show this help message.
+  -v, --version     Show the version information.
+  -c, --config      Show the current configuration.
+  --create-config   Force creation of a new configuration file.
+
+Configuration:
+  Configuration is stored in $CONFIG_FILE
+  If the file does not exist, it will be created interactively.
+
+Logs:
+  Logs are stored in $CONFIG_HOME
+
+Examples:
+  notisend sleep 5
+  notisend ./my_script.sh --arg1 value1
+  notisend -c
+  notisend --create-config
+EOF
+  exit 0
+}
+
+# --- Version Function ---
+show_version() {
+  echo -e "\033[1;32m[notisend]\033[0m version $VERSION"
+  exit 0
+}
+
+# --- Configuration ---
+COMMAND=("$@") # creates an array with the command and parameters
+CONFIG_HOME="$HOME/.config/notisend"
+CONFIG_FILE="$CONFIG_HOME/notisend.conf"
+
+# --- Default Config ---
+# if TITLE is empty, use COMMAND
+# TOPIC needs to be defined by the user
+DESC_SIZE="10"
+SUCCESS_TAGS="white_check_mark"
+SUCCESS_PRIO="3"
+ERROR_TAGS="x"
+ERROR_PRIO="4"
+HOST="ntfy.sh"
+LOGS_TO_KEEP="5"
+
+create_config() {
+  mkdir -p "$CONFIG_HOME"
+  >"$CONFIG_FILE"
+
+  # title
+  echo -e "${bold}${green}Enter the default title for notifications ${reset_colour}${reset_format}(or press Enter to use the wrapped command as a title):"
+  read -r -p "> " TITLE
+  echo ""
+  echo "TITLE=\"$TITLE\" # Title for the notications, if empty, use the wrapped command as title" >>"$CONFIG_FILE"
+
+  # host
+  echo -e "${bold}${green}Enter the default ntfy host ${reset_colour}${reset_format}(or press Enter to use ntfy.sh)"
+  read -r -p "> " HOST
+  HOST="${HOST:-ntfy.sh}"
+  echo ""
+  echo "HOST=\"$HOST\" # ntfy host to use, defaults to ntfy.sh" >>"$CONFIG_FILE"
+
+  # topic
+  while true; do
+    echo -e "${bold}${green}Enter the topic:${reset_colour}${reset_format}"
+    echo -e "${grey}Topics don't have to explicitly be created, you can define one now and check it later on https://$HOST/your-topic ${reset_colour}"
+    read -r -p "> " TOPIC
+    echo ""
+    [[ -z "$TOPIC" ]] && echo -e "${bold}${red}Please provide a topic.\n${reset_colour}${reset_format}" || break
+  done
+  echo "TOPIC=\"$TOPIC\" # Topic (channel) for the ntfy host" >>"$CONFIG_FILE"
+
+  # desc size
+  while true; do
+    echo -e "${bold}${green}Enter the default description size ${reset_colour}${reset_format}(or press Enter for 10 lines):"
+    echo -e "${grey}This is the amount of lines from the wrapped command's output to use as a description for the notification${reset_colour}"
+    read -r -p "> " DESC_SIZE
+    echo ""
+    [[ -z "$DESC_SIZE" ]] && {
+      DESC_SIZE=10
+      break
+    }
+    [[ "$DESC_SIZE" =~ ^[0-9]+$ ]] && break || echo -e "${bold}${red}Enter a positive number.\n${reset_colour}${reset_format}"
+  done
+  echo "DESC_SIZE=\"$DESC_SIZE\" # Amount of lines from command output to send as the description" >>"$CONFIG_FILE"
+
+  # default values
+  echo -e "Setting default values..."
+  cat <<EOF >>"$CONFIG_FILE"
+SUCCESS_TAGS="$SUCCESS_TAGS" # Tags to be used when command is successful (exit code 0)
+SUCCESS_PRIO="$SUCCESS_PRIO" # Priority for successful command notification
+ERROR_TAGS="$ERROR_TAGS" # Tags to be used when command errors out (non 0 exit code)
+ERROR_PRIO="$ERROR_PRIO" # Priority for error notification (non 0 exit code)
+LOGS_TO_KEEP="$LOGS_TO_KEEP" # Amount of log files to keep
+
+####
+
+# To check which tags can be used, refer to https://docs.ntfy.sh/emojis/
+# Priorities can be checked on https://docs.ntfy.sh/subscribe/phone/?h=priority#message-priority
+EOF
+
+  echo -e "\nConfig created at $CONFIG_FILE"
+  source "$CONFIG_FILE"
+}
+
+# check_missing_configs() {
+#   local missing_vars=()
+#   local required_vars=("HOST" "TOPIC" "DESC_SIZE" "SUCCESS_TAGS" "SUCCESS_PRIO" "ERROR_TAGS" "ERROR_PRIO" "LOGS_TO_KEEP")
+
+#   for var in "${required_vars[@]}"; do [[ -z "${!var}" ]] && missing_vars+=("$var"); done
+
+#   if [[ ${#missing_vars[@]} -gt 0 ]]; then
+#     bold_orange "Warning: The following variables are missing from your configuration file:"
+#     for var in "${missing_vars[@]}"; do echo "- $var"; done
+#   fi
+# }
+
+load_config() {
+  if [[ -f "$CONFIG_FILE" ]] && [[ -s "$CONFIG_FILE" ]]; then
+    source "$CONFIG_FILE"
+    # check_missing_configs
+    return 0 # avoids unnecessary config creation
+  else
+    echo -e "No config file found, creating a new one...\n"
+    create_config
+    return 0
+  fi
+}
+
+show_config() {
+  if [[ -f "$CONFIG_FILE" ]] && [[ -s "$CONFIG_FILE" ]]; then
+    sed 's/#[^"]*$//' "$CONFIG_FILE" | sed '/^$/d'
+  else
+    echo "No configuration file found." >&2 # error message to stderr
+    exit 1
+  fi
+  exit 0
+}
+
+# --- Wrapped Command ---
+run_command() {
+  temp_log=$(mktemp "$CONFIG_HOME"/notisend.XXXXXXXX)
+  # command group to correctly capture the exit code
+  { "${COMMAND[@]}" 2>&1 | tee "$temp_log"; }
+  EXIT_CODE=$?
+  DESC=$(tail -n "$DESC_SIZE" "$temp_log" | sed 's/\x1b\[[0-9;]*m//g') # sed to remove escape codes
+  check_exit_code
+}
+
+check_exit_code() {
+  # this is for the wrapped command
+  if [[ "$EXIT_CODE" -eq 0 ]]; then
+    TAGS="$SUCCESS_TAGS"
+    PRIO="$SUCCESS_PRIO"
+  else
+    TAGS="$ERROR_TAGS"
+    PRIO="$ERROR_PRIO"
+  fi
+}
+
+check_title() {
+  # use TITLE from config, or COMMAND if it's empty
+  if [[ -z "$TITLE" ]]; then
+    printf -v NOTI_TITLE '%q ' "${COMMAND[@]}"
+  else
+    NOTI_TITLE="$TITLE"
+  fi
+}
+
+send_ntfy() {
+  local LOG_FILE_NAMED="$CONFIG_HOME/notisend_$(date +%Y%m%d_%H%M%S).log"
+  temp_error_log=$(mktemp "$CONFIG_HOME"/notisend_error.XXXXXXXX)
+
+  check_title
+
+  curl -# --fail-with-body -o "$LOG_FILE_NAMED" \
+    -H "Title: $NOTI_TITLE" \
+    -H "Tags: $TAGS" \
+    -H "Priority: $PRIO" \
+    -d "$DESC" \
+    "$HOST"/"$TOPIC" 2>"$temp_error_log"
+
+  if [[ "$?" -eq 0 ]]; then
+    echo -e "\n>> \033[1;32m[notisend]\033[0m posted notification\n"
+  else
+    echo -e "\n>> \033[1;31m[notisend]\033[0m error. See $LOG_FILE_NAMED for details.\n"
+    cat "$temp_error_log" >>"$LOG_FILE_NAMED"
+  fi
+}
+
+# --- Cleanup ---
+cleanup() {
+  [[ -f "$temp_log" ]] && rm -f $temp_log
+  [[ -f "$temp_error_log" ]] && rm -f $temp_error_log
+  # Log rotation, keep only the LOGS_TO_KEEP most recent log files
+  find "$CONFIG_HOME" -name "notisend_*.log" -type f -print0 |
+    sort -rz |
+    tail -n "$LOGS_TO_KEEP" -z |
+    xargs -0 rm -f --
+}
+
+# --- Argument Parsing ---
+# there's definitely a better way of doing this but bear with me
+# long options
+args=()
+for arg in "$@"; do
+  case "$arg" in
+  --help)
+    usage
+    ;;
+  --version)
+    show_version
+    ;;
+  --config)
+    show_config
+    ;;
+  --create-config)
+    create_config
+    exit 0
+    ;;
+  *)
+    args+=("$arg")
+    ;;
+  esac
+done
+
+# short options
+while getopts ":hvc" opt; do
+  case $opt in
+  h)
+    usage
+    ;;
+  v)
+    show_version
+    ;;
+  c)
+    show_config
+    ;;
+  \?)
+    echo -e "\033[1;31mInvalid option:\033[0m -$OPTARG" >&2
+    usage
+    exit 1
+    ;;
+  :)
+    echo "Option -$OPTARG requires an argument." >&2
+    usage
+    exit 1
+    ;;
+  esac
+done
+
+shift $((OPTIND - 1))
+
+# --- Main Execution ---
+# Check if any arguments were provided.
+if [[ $# -eq 0 ]]; then
+  echo -e "${bold}${red}Error:${reset_colour}${reset_format} No command provided.\n" >&2
+  usage
+  exit 1
+fi
+
+COMMAND=("$@") # recreate the COMMAND array after option processing
+
+load_config
+run_command
+send_ntfy
+cleanup
+
+exit "$EXIT_CODE"
