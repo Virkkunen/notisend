@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # --- Metadata ---
-VERSION="1.1.2"
+VERSION="1.1.3"
 COPYRIGHT="Copyright (c) 2025 Virkkunen.  All rights reserved."
 LICENSE="Apache-2.0 License"
 
@@ -29,10 +29,13 @@ Options:
 
 Configuration:
   Configuration is stored in $CONFIG_FILE
-  If the file does not exist, it will be created interactively.
+  If the file does not exist, it will be created interactively 
+  when running a command, or you can use --create-config
 
 Logs:
   Logs are stored in $CONFIG_HOME
+  By default, 5 log files are stored. 
+  Check the configuration file for LOGS_TO_KEEP to change that.
 
 Examples:
   notisend sleep 5
