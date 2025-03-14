@@ -8,6 +8,8 @@ A wrapper to send command outputs as a notification to ntfy
 
 # Documentation and usage
 
+To receive notifications, first you need to download [ntfy](https://ntfy.sh/) and subscribe to a topic of your choosing.
+
 ## Options
 
 `-h`, `--help`: Show the help message.
