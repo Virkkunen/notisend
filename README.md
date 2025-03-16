@@ -69,14 +69,14 @@ By default, 5 log files are stored. Check the configuration file for `LOGS_TO_KE
 ### Using cURL
 
 ```sh
-curl -Lo "~/.local/bin" https://raw.githubusercontent.com/Virkkunen/notisend/refs/heads/master/bin/notisend
+curl -Lo "~/.local/bin/notisend" https://raw.githubusercontent.com/Virkkunen/notisend/refs/heads/master/bin/notisend
 chmod +x ~/.local/bin/notisend
 ```
 
 ### Using wget
 
 ```sh
-wget -O "~/.local/bin" https://raw.githubusercontent.com/Virkkunen/notisend/refs/heads/master/bin/notisend
+wget -O "~/.local/bin/notisend" https://raw.githubusercontent.com/Virkkunen/notisend/refs/heads/master/bin/notisend
 chmod +x ~/.local/bin/notisend
 ```
 
