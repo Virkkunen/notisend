@@ -3,8 +3,8 @@
 # source "$HOME/.aliases"
 
 # --- Metadata ---
-VERSION="1.1.5"
-COPYRIGHT="Copyright (c) 2025 Virkkunen.  All rights reserved."
+VERSION="1.1.6"
+COPYRIGHT="Copyright (c) 2025 Virkkunen. All rights reserved."
 LICENSE="Apache-2.0 License"
 
 # --- Colour And Formatting Definitions ---
@@ -222,11 +222,12 @@ expand_aliases() {
 cleanup() {
   [[ -f "$temp_log" ]] && rm -f $temp_log
   [[ -f "$temp_error_log" ]] && rm -f $temp_error_log
+
   # Log rotation, keep only the LOGS_TO_KEEP most recent log files
-  find "$CONFIG_HOME" -name "notisend_*.log" -type f -print0 |
-    sort -rz |
-    tail -n "$LOGS_TO_KEEP" -z |
-    xargs -0 rm -f --
+  local -a log_files=("$CONFIG_HOME"/notisend_*.log)
+  local num_logs=${#log_files[@]}
+
+  [[ $num_logs -gt "$LOGS_TO_KEEP" ]] && rm -f -- "${log_files[@]:0:$((num_logs - LOGS_TO_KEEP))}"
 }
 
 # --- Argument Parsing ---
