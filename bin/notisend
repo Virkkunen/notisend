@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 
+# source "$HOME/.aliases"
+
 # --- Metadata ---
-VERSION="1.1.3"
+VERSION="1.1.4"
 COPYRIGHT="Copyright (c) 2025 Virkkunen.  All rights reserved."
 LICENSE="Apache-2.0 License"
 
@@ -53,7 +55,6 @@ show_version() {
 }
 
 # --- Configuration ---
-COMMAND=("$@") # creates an array with the command and parameters
 CONFIG_HOME="$HOME/.config/notisend"
 CONFIG_FILE="$CONFIG_HOME/notisend.conf"
 
@@ -213,6 +214,11 @@ send_ntfy() {
   fi
 }
 
+# --- Expand User Aliases ---
+expand_aliases() {
+  echo ""
+}
+
 # --- Cleanup ---
 cleanup() {
   [[ -f "$temp_log" ]] && rm -f $temp_log
@@ -287,6 +293,7 @@ fi
 COMMAND=("$@") # recreate the COMMAND array after option processing
 
 load_config
+expand_aliases
 run_command
 send_ntfy
 cleanup
