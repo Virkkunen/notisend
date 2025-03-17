@@ -10,12 +10,12 @@ LICENSE="Apache-2.0 License"
 # --- Colour And Formatting Definitions ---
 declare -A text=(
   [bold]="\033[1m"
-  [reset_format]="\033[0m"
+  [reset]="\033[0m"
   [green]="\033[32m"
   [red]="\033[31m"
   [orange]="\033[33m"
   [grey]="\033[38;5;240m"
-  [reset_colour]="\033[0m"
+
 )
 
 # --- Usage/Help Function ---
@@ -52,7 +52,7 @@ EOF
 
 # --- Version Function ---
 show_version() {
-  echo -e "${text[green]}${text[bold]}[notisend]${text[reset_format]}${text[reset_colour]} version $VERSION"
+  echo -e "${text[green]}${text[bold]}[notisend]${text[reset]} version $VERSION"
   exit 0
 }
 
@@ -83,18 +83,18 @@ create_config() {
   for var in TITLE HOST TOPIC DESC_SIZE; do
     case $var in
     TITLE)
-      echo -e "${text[bold]}${text[green]}Enter the default title for notifications ${text[reset_colour]}${text[reset_format]}(or press Enter to use the wrapped command as a title):"
+      echo -e "${text[bold]}${text[green]}Enter the default title for notifications ${text[reset]}(or press Enter to use the wrapped command as a title):"
       ;;
     HOST)
-      echo -e "${text[bold]}${text[green]}Enter the default ntfy host ${text[reset_colour]}${text[reset_format]}(or press Enter to use ntfy.sh)"
+      echo -e "${text[bold]}${text[green]}Enter the default ntfy host ${text[reset]}(or press Enter to use ntfy.sh)"
       ;;
     TOPIC)
-      echo -e "${text[bold]}${text[green]}Enter the topic:${text[reset_colour]}${text[reset_format]}"
-      echo -e "${text[grey]}Topics don't have to explicitly be created, you can define one now and check it later on https://$HOST/your-topic ${text[reset_colour]}"
+      echo -e "${text[bold]}${text[green]}Enter the topic:${text[reset]}"
+      echo -e "${text[grey]}Topics don't have to explicitly be created, you can define one now and check it later on https://$HOST/your-topic "
       ;;
     DESC_SIZE)
-      echo -e "${text[bold]}${text[green]}Enter the default description size ${text[reset_colour]}${text[reset_format]}(or press Enter for 10 lines):"
-      echo -e "${text[grey]}This is the amount of lines from the wrapped command's output to use as a description for the notification${text[reset_colour]}"
+      echo -e "${text[bold]}${text[green]}Enter the default description size ${text[reset]}(or press Enter for 10 lines):"
+      echo -e "${text[grey]}This is the amount of lines from the wrapped command's output to use as a description for the notification"
       ;;
     esac
 
@@ -102,14 +102,14 @@ create_config() {
       read -r -p "> " value
       case $var in
       TOPIC)
-        [[ -z "$value" ]] && echo -e "${text[bold]}${text[red]}Please provide a topic.\n${text[reset_colour]}${text[reset_format]}" || break
+        [[ -z "$value" ]] && echo -e "${text[bold]}${text[red]}Please provide a topic.\n${text[reset]}" || break
         ;;
       DESC_SIZE)
         [[ -z "$value" ]] && {
           value=10
           break
         }
-        [[ "$value" =~ ^[0-9]+$ ]] && break || echo -e "${text[bold]}${text[red]}Enter a positive number.${text[reset_colour]}${text[reset_format]}"
+        [[ "$value" =~ ^[0-9]+$ ]] && break || echo -e "${text[bold]}${text[red]}Enter a positive number.${text[reset]}"
         ;;
       *)
         break
@@ -139,7 +139,7 @@ load_config() {
     # check_missing_configs
     return 0 # avoids unnecessary config creation
   else
-    echo -e "${text[orange]}No config file found, creating a new one...${text[reset_colour]}\n"
+    echo -e "${text[orange]}No config file found, creating a new one...\n"
     create_config
     return 0
   fi
@@ -157,7 +157,7 @@ show_config() {
 
 # --- Wrapped Command ---
 run_command() {
-  temp_log=$(mktemp "$CONFIG_HOME"/notisend.XXXXXXXX) || { echo -e "${text[red]}Failed to create temp file${text[reset_colour]}" >&2; exit 1; }
+  temp_log=$(mktemp "$CONFIG_HOME"/notisend.XXXXXXXX) || { echo -e "${text[red]}Failed to create temp file" >&2; exit 1; }
   "${COMMAND[@]}" 2>&1 | tee "$temp_log"
   EXIT_CODE="${PIPESTATUS[0]}" # get the exit code from the command instead of tee
   DESC=$(tail -n "$DESC_SIZE" "$temp_log" | sed 's/\x1b\[[0-9;]*m//g') # sed to remove escape codes
@@ -176,8 +176,8 @@ check_exit_code() {
 }
 
 send_ntfy() {
-  local LOG_FILE_NAMED="$CONFIG_HOME/notisend_$(date +%Y%m%d_%H%M%S).log" || { echo -e "${text[red]}Failed to create temp file${text[reset_colour]}" >&2; exit 1; }
-  temp_error_log=$(mktemp "$CONFIG_HOME"/notisend_error.XXXXXXXX) || { echo -e "${text[red]}Failed to create temp error file${text[reset_colour]}" >&2; exit 1; }
+  local LOG_FILE_NAMED="$CONFIG_HOME/notisend_$(date +%Y%m%d_%H%M%S).log" || { echo -e "${text[red]}Failed to create temp file" >&2; exit 1; }
+  temp_error_log=$(mktemp "$CONFIG_HOME"/notisend_error.XXXXXXXX) || { echo -e "${text[red]}Failed to create temp error file" >&2; exit 1; }
 
   [[ -z "$TITLE" ]] && printf -v NOTI_TITLE '%q ' "${COMMAND[@]}" || NOTI_TITLE="$TITLE"
 
@@ -189,9 +189,9 @@ send_ntfy() {
     "$HOST"/"$TOPIC" 2>"$temp_error_log"
 
   if [[ "$?" -eq 0 ]]; then
-    echo -e "\n>> ${text[green]}${text[bold]}[notisend]${text[reset_format]}${text[reset_colour]} posted notification\n"
+    echo -e "\n>> ${text[green]}${text[bold]}[notisend]${text[reset]} posted notification\n"
   else
-    echo -e "\n>> ${text[red]}${text[bold]}[notisend]${text[reset_format]}${text[reset_colour]} error. See $LOG_FILE_NAMED for details.\n"
+    echo -e "\n>> ${text[red]}${text[bold]}[notisend]${text[reset]} error. See $LOG_FILE_NAMED for details.\n"
     cat "$temp_error_log" >>"$LOG_FILE_NAMED"
   fi
 }
@@ -222,7 +222,7 @@ while [[ $# -gt 0 ]]; do
       break
       ;;
     -*)
-      echo -e "${text[bold]}${text[red]}Invalid option: $1${text[reset_colour]}${text[reset_format]}" >&2
+      echo -e "${text[bold]}${text[red]}Invalid option: $1${text[reset]}" >&2
       usage
       exit 1
       ;;
@@ -237,7 +237,7 @@ done
 # --- Main Execution ---
 # Check if any arguments were provided
 [[ ${#COMMAND[@]} -eq 0 ]] && {
-  echo -e "${text[bold]}${text[red]}Error:${text[reset_colour]}${text[reset_format]} No command provided.\n" >&2
+  echo -e "${text[bold]}${text[red]}Error:${text[reset]} No command provided.\n" >&2
   usage
   exit 1
 }
