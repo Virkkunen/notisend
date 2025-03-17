@@ -3,18 +3,20 @@
 # source "$HOME/.aliases"
 
 # --- Metadata ---
-VERSION="1.1.6"
+VERSION="1.2.0"
 COPYRIGHT="Copyright (c) 2025 Virkkunen. All rights reserved."
 LICENSE="Apache-2.0 License"
 
 # --- Colour And Formatting Definitions ---
-bold="\033[1m"
-reset_format="\033[0m"
-green="\033[32m"
-red="\033[31m"
-orange="\033[33m"
-grey="\033[38;5;240m"
-reset_colour="\033[0m"
+declare -A text=(
+  [bold]="\033[1m"
+  [reset_format]="\033[0m"
+  [green]="\033[32m"
+  [red]="\033[31m"
+  [orange]="\033[33m"
+  [grey]="\033[38;5;240m"
+  [reset_colour]="\033[0m"
+)
 
 # --- Usage/Help Function ---
 usage() {
@@ -50,7 +52,7 @@ EOF
 
 # --- Version Function ---
 show_version() {
-  echo -e "\033[1;32m[notisend]\033[0m version $VERSION"
+  echo -e "${text[green]}${text[bold]}[notisend]${text[reset_format]}${text[reset_colour]} version $VERSION"
   exit 0
 }
 
@@ -74,13 +76,13 @@ create_config() {
   >"$CONFIG_FILE"
 
   # title
-  echo -e "${bold}${green}Enter the default title for notifications ${reset_colour}${reset_format}(or press Enter to use the wrapped command as a title):"
+  echo -e "${text[bold]}${text[green]}Enter the default title for notifications ${text[reset_colour]}${text[reset_format]}(or press Enter to use the wrapped command as a title):"
   read -r -p "> " TITLE
   echo ""
   echo "TITLE=\"$TITLE\" # Title for the notications, if empty, use the wrapped command as title" >>"$CONFIG_FILE"
 
   # host
-  echo -e "${bold}${green}Enter the default ntfy host ${reset_colour}${reset_format}(or press Enter to use ntfy.sh)"
+  echo -e "${text[bold]}${text[green]}Enter the default ntfy host ${text[reset_colour]}${text[reset_format]}(or press Enter to use ntfy.sh)"
   read -r -p "> " HOST
   HOST="${HOST:-ntfy.sh}"
   echo ""
@@ -88,25 +90,25 @@ create_config() {
 
   # topic
   while true; do
-    echo -e "${bold}${green}Enter the topic:${reset_colour}${reset_format}"
-    echo -e "${grey}Topics don't have to explicitly be created, you can define one now and check it later on https://$HOST/your-topic ${reset_colour}"
+    echo -e "${text[bold]}${text[green]}Enter the topic:${text[reset_colour]}${text[reset_format]}"
+    echo -e "${grey}Topics don't have to explicitly be created, you can define one now and check it later on https://$HOST/your-topic ${text[reset_colour]}"
     read -r -p "> " TOPIC
     echo ""
-    [[ -z "$TOPIC" ]] && echo -e "${bold}${red}Please provide a topic.\n${reset_colour}${reset_format}" || break
+    [[ -z "$TOPIC" ]] && echo -e "${text[bold]}${text[red]}Please provide a topic.\n${text[reset_colour]}${text[reset_format]}" || break
   done
   echo "TOPIC=\"$TOPIC\" # Topic (channel) for the ntfy host" >>"$CONFIG_FILE"
 
   # desc size
   while true; do
-    echo -e "${bold}${green}Enter the default description size ${reset_colour}${reset_format}(or press Enter for 10 lines):"
-    echo -e "${grey}This is the amount of lines from the wrapped command's output to use as a description for the notification${reset_colour}"
+    echo -e "${text[bold]}${text[green]}Enter the default description size ${text[reset_colour]}${text[reset_format]}(or press Enter for 10 lines):"
+    echo -e "${grey}This is the amount of lines from the wrapped command's output to use as a description for the notification${text[reset_colour]}"
     read -r -p "> " DESC_SIZE
     echo ""
     [[ -z "$DESC_SIZE" ]] && {
       DESC_SIZE=10
       break
     }
-    [[ "$DESC_SIZE" =~ ^[0-9]+$ ]] && break || echo -e "${bold}${red}Enter a positive number.\n${reset_colour}${reset_format}"
+    [[ "$DESC_SIZE" =~ ^[0-9]+$ ]] && break || echo -e "${text[bold]}${text[red]}Enter a positive number.\n${text[reset_colour]}${text[reset_format]}"
   done
   echo "DESC_SIZE=\"$DESC_SIZE\" # Amount of lines from command output to send as the description" >>"$CONFIG_FILE"
 
@@ -128,18 +130,6 @@ EOF
   echo -e "\nConfig created at $CONFIG_FILE"
   source "$CONFIG_FILE"
 }
-
-# check_missing_configs() {
-#   local missing_vars=()
-#   local required_vars=("HOST" "TOPIC" "DESC_SIZE" "SUCCESS_TAGS" "SUCCESS_PRIO" "ERROR_TAGS" "ERROR_PRIO" "LOGS_TO_KEEP")
-
-#   for var in "${required_vars[@]}"; do [[ -z "${!var}" ]] && missing_vars+=("$var"); done
-
-#   if [[ ${#missing_vars[@]} -gt 0 ]]; then
-#     bold_orange "Warning: The following variables are missing from your configuration file:"
-#     for var in "${missing_vars[@]}"; do echo "- $var"; done
-#   fi
-# }
 
 load_config() {
   if [[ -f "$CONFIG_FILE" ]] && [[ -s "$CONFIG_FILE" ]]; then
@@ -206,16 +196,11 @@ send_ntfy() {
     "$HOST"/"$TOPIC" 2>"$temp_error_log"
 
   if [[ "$?" -eq 0 ]]; then
-    echo -e "\n>> \033[1;32m[notisend]\033[0m posted notification\n"
+    echo -e "\n>> ${text[green]}${text[bold]}[notisend]${text[reset_format]}${text[reset_colour]} posted notification\n"
   else
-    echo -e "\n>> \033[1;31m[notisend]\033[0m error. See $LOG_FILE_NAMED for details.\n"
+    echo -e "\n>> ${text[red]}${text[bold]}[notisend]${text[reset_format]}${text[reset_colour]} error. See $LOG_FILE_NAMED for details.\n"
     cat "$temp_error_log" >>"$LOG_FILE_NAMED"
   fi
-}
-
-# --- Expand User Aliases ---
-expand_aliases() {
-  echo ""
 }
 
 # --- Cleanup ---
@@ -285,7 +270,7 @@ shift $((OPTIND - 1))
 # --- Main Execution ---
 # Check if any arguments were provided.
 if [[ $# -eq 0 ]]; then
-  echo -e "${bold}${red}Error:${reset_colour}${reset_format} No command provided.\n" >&2
+  echo -e "${text[bold]}${text[red]}Error:${text[reset_colour]}${text[reset_format]} No command provided.\n" >&2
   usage
   exit 1
 fi
@@ -293,7 +278,6 @@ fi
 COMMAND=("$@") # recreate the COMMAND array after option processing
 
 load_config
-expand_aliases
 run_command
 send_ntfy
 cleanup
