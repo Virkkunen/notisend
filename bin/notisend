@@ -63,72 +63,74 @@ CONFIG_FILE="$CONFIG_HOME/notisend.conf"
 # --- Default Config ---
 # if TITLE is empty, use COMMAND
 # TOPIC needs to be defined by the user
-DESC_SIZE="10"
-SUCCESS_TAGS="white_check_mark"
-SUCCESS_PRIO="3"
-ERROR_TAGS="x"
-ERROR_PRIO="4"
-HOST="ntfy.sh"
-LOGS_TO_KEEP="5"
+declare -A defaultConfig=(
+  [TITLE]=""
+  [HOST]="ntfy.sh"
+  [TOPIC]=""
+  [DESC_SIZE]="10"
+  [SUCCESS_TAGS]="white_check_mark"
+  [SUCCESS_PRIO]="3"
+  [ERROR_TAGS]="x"
+  [ERROR_PRIO]="4"
+  [LOGS_TO_KEEP]="5"
+)
 
 create_config() {
   mkdir -p "$CONFIG_HOME"
   >"$CONFIG_FILE"
 
-  # title
-  echo -e "${text[bold]}${text[green]}Enter the default title for notifications ${text[reset_colour]}${text[reset_format]}(or press Enter to use the wrapped command as a title):"
-  read -r -p "> " TITLE
-  echo ""
-  echo "TITLE=\"$TITLE\" # Title for the notications, if empty, use the wrapped command as title" >>"$CONFIG_FILE"
+  local var value
+  for var in TITLE HOST TOPIC DESC_SIZE; do
+    case $var in
+    TITLE)
+      echo -e "${text[bold]}${text[green]}Enter the default title for notifications ${text[reset_colour]}${text[reset_format]}(or press Enter to use the wrapped command as a title):"
+      ;;
+    HOST)
+      echo -e "${text[bold]}${text[green]}Enter the default ntfy host ${text[reset_colour]}${text[reset_format]}(or press Enter to use ntfy.sh)"
+      ;;
+    TOPIC)
+      echo -e "${text[bold]}${text[green]}Enter the topic:${text[reset_colour]}${text[reset_format]}"
+      echo -e "${text[grey]}Topics don't have to explicitly be created, you can define one now and check it later on https://$HOST/your-topic ${text[reset_colour]}"
+      ;;
+    DESC_SIZE)
+      echo -e "${text[bold]}${text[green]}Enter the default description size ${text[reset_colour]}${text[reset_format]}(or press Enter for 10 lines):"
+      echo -e "${text[grey]}This is the amount of lines from the wrapped command's output to use as a description for the notification${text[reset_colour]}"
+      ;;
+    esac
 
-  # host
-  echo -e "${text[bold]}${text[green]}Enter the default ntfy host ${text[reset_colour]}${text[reset_format]}(or press Enter to use ntfy.sh)"
-  read -r -p "> " HOST
-  HOST="${HOST:-ntfy.sh}"
-  echo ""
-  echo "HOST=\"$HOST\" # ntfy host to use, defaults to ntfy.sh" >>"$CONFIG_FILE"
+    while true; do
+      read -r -p "> " value
+      case $var in
+      TOPIC)
+        [[ -z "$value" ]] && echo -e "${text[bold]}${text[red]}Please provide a topic.\n${text[reset_colour]}${text[reset_format]}" || break
+        ;;
+      DESC_SIZE)
+        [[ -z "$value" ]] && {
+          value=10
+          break
+        }
+        [[ "$value" =~ ^[0-9]+$ ]] && break || echo -e "${text[bold]}${text[red]}Enter a positive number.${text[reset_colour]}${text[reset_format]}"
+        ;;
+      *)
+        break
+        ;;
+      esac
+    done
 
-  # topic
-  while true; do
-    echo -e "${text[bold]}${text[green]}Enter the topic:${text[reset_colour]}${text[reset_format]}"
-    echo -e "${grey}Topics don't have to explicitly be created, you can define one now and check it later on https://$HOST/your-topic ${text[reset_colour]}"
-    read -r -p "> " TOPIC
+    echo "${var}=\"${value:-${defaultConfig[$var]}}\"" >>"$CONFIG_FILE"
     echo ""
-    [[ -z "$TOPIC" ]] && echo -e "${text[bold]}${text[red]}Please provide a topic.\n${text[reset_colour]}${text[reset_format]}" || break
   done
-  echo "TOPIC=\"$TOPIC\" # Topic (channel) for the ntfy host" >>"$CONFIG_FILE"
 
-  # desc size
-  while true; do
-    echo -e "${text[bold]}${text[green]}Enter the default description size ${text[reset_colour]}${text[reset_format]}(or press Enter for 10 lines):"
-    echo -e "${grey}This is the amount of lines from the wrapped command's output to use as a description for the notification${text[reset_colour]}"
-    read -r -p "> " DESC_SIZE
-    echo ""
-    [[ -z "$DESC_SIZE" ]] && {
-      DESC_SIZE=10
-      break
-    }
-    [[ "$DESC_SIZE" =~ ^[0-9]+$ ]] && break || echo -e "${text[bold]}${text[red]}Enter a positive number.\n${text[reset_colour]}${text[reset_format]}"
-  done
-  echo "DESC_SIZE=\"$DESC_SIZE\" # Amount of lines from command output to send as the description" >>"$CONFIG_FILE"
-
-  # default values
-  echo -e "Setting default values..."
   cat <<EOF >>"$CONFIG_FILE"
-SUCCESS_TAGS="$SUCCESS_TAGS" # Tags to be used when command is successful (exit code 0)
-SUCCESS_PRIO="$SUCCESS_PRIO" # Priority for successful command notification
-ERROR_TAGS="$ERROR_TAGS" # Tags to be used when command errors out (non 0 exit code)
-ERROR_PRIO="$ERROR_PRIO" # Priority for error notification (non 0 exit code)
-LOGS_TO_KEEP="$LOGS_TO_KEEP" # Amount of log files to keep
-
-####
-
-# To check which tags can be used, refer to https://docs.ntfy.sh/emojis/
-# Priorities can be checked on https://docs.ntfy.sh/subscribe/phone/?h=priority#message-priority
+SUCCESS_TAGS="${defaultConfig[SUCCESS_TAGS]}"
+SUCCESS_PRIO="${defaultConfig[SUCCESS_PRIO]}"
+ERROR_TAGS="${defaultConfig[ERROR_TAGS]}"
+ERROR_PRIO="${defaultConfig[ERROR_PRIO]}"
+LOGS_TO_KEEP="${defaultConfig[LOGS_TO_KEEP]}"
 EOF
 
   echo -e "\nConfig created at $CONFIG_FILE"
-  source "$CONFIG_FILE"
+  exit 0
 }
 
 load_config() {
@@ -137,7 +139,7 @@ load_config() {
     # check_missing_configs
     return 0 # avoids unnecessary config creation
   else
-    echo -e "No config file found, creating a new one...\n"
+    echo -e "${text[orange]}No config file found, creating a new one...${text[reset_colour]}\n"
     create_config
     return 0
   fi
@@ -155,7 +157,7 @@ show_config() {
 
 # --- Wrapped Command ---
 run_command() {
-  temp_log=$(mktemp "$CONFIG_HOME"/notisend.XXXXXXXX)
+  temp_log=$(mktemp "$CONFIG_HOME"/notisend.XXXXXXXX) || { echo -e "${text[red]}Failed to create temp file${text[reset_colour]}" >&2; exit 1; }
   "${COMMAND[@]}" 2>&1 | tee "$temp_log"
   EXIT_CODE="${PIPESTATUS[0]}" # get the exit code from the command instead of tee
   DESC=$(tail -n "$DESC_SIZE" "$temp_log" | sed 's/\x1b\[[0-9;]*m//g') # sed to remove escape codes
@@ -173,20 +175,11 @@ check_exit_code() {
   fi
 }
 
-check_title() {
-  # use TITLE from config, or COMMAND if it's empty
-  if [[ -z "$TITLE" ]]; then
-    printf -v NOTI_TITLE '%q ' "${COMMAND[@]}"
-  else
-    NOTI_TITLE="$TITLE"
-  fi
-}
-
 send_ntfy() {
-  local LOG_FILE_NAMED="$CONFIG_HOME/notisend_$(date +%Y%m%d_%H%M%S).log"
-  temp_error_log=$(mktemp "$CONFIG_HOME"/notisend_error.XXXXXXXX)
+  local LOG_FILE_NAMED="$CONFIG_HOME/notisend_$(date +%Y%m%d_%H%M%S).log" || { echo -e "${text[red]}Failed to create temp file${text[reset_colour]}" >&2; exit 1; }
+  temp_error_log=$(mktemp "$CONFIG_HOME"/notisend_error.XXXXXXXX) || { echo -e "${text[red]}Failed to create temp error file${text[reset_colour]}" >&2; exit 1; }
 
-  check_title
+  [[ -z "$TITLE" ]] && printf -v NOTI_TITLE '%q ' "${COMMAND[@]}" || NOTI_TITLE="$TITLE"
 
   curl -# --fail-with-body -o "$LOG_FILE_NAMED" \
     -H "Title: $NOTI_TITLE" \
@@ -216,66 +209,40 @@ cleanup() {
 }
 
 # --- Argument Parsing ---
-# there's definitely a better way of doing this but bear with me
-# long options
 args=()
-for arg in "$@"; do
-  case "$arg" in
-  --help)
-    usage
-    ;;
-  --version)
-    show_version
-    ;;
-  --config)
-    show_config
-    ;;
-  --create-config)
-    create_config
-    exit 0
-    ;;
-  *)
-    args+=("$arg")
-    ;;
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -h | --help)        usage ;;
+    -v | --version)     show_version ;;
+    -c | --config)      show_config ;;
+    --create-config)    create_config ;;
+    --)
+      shift
+      COMMAND+=("$@")
+      break
+      ;;
+    -*)
+      echo -e "${text[bold]}${text[red]}Invalid option: $1${text[reset_colour]}${text[reset_format]}" >&2
+      usage
+      exit 1
+      ;;
+    *)
+      COMMAND+=("$@")
+      break
+      ;;
   esac
+  shift
 done
-
-# short options
-while getopts ":hvc" opt; do
-  case $opt in
-  h)
-    usage
-    ;;
-  v)
-    show_version
-    ;;
-  c)
-    show_config
-    ;;
-  \?)
-    echo -e "\033[1;31mInvalid option:\033[0m -$OPTARG" >&2
-    usage
-    exit 1
-    ;;
-  :)
-    echo "Option -$OPTARG requires an argument." >&2
-    usage
-    exit 1
-    ;;
-  esac
-done
-
-shift $((OPTIND - 1))
 
 # --- Main Execution ---
-# Check if any arguments were provided.
-if [[ $# -eq 0 ]]; then
+# Check if any arguments were provided
+[[ ${#COMMAND[@]} -eq 0 ]] && {
   echo -e "${text[bold]}${text[red]}Error:${text[reset_colour]}${text[reset_format]} No command provided.\n" >&2
   usage
   exit 1
-fi
+}
 
-COMMAND=("$@") # recreate the COMMAND array after option processing
+# COMMAND=("${args[@]}") # recreate the COMMAND array after option processing
 
 load_config
 run_command
