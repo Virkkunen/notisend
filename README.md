@@ -20,6 +20,10 @@ To receive notifications, first you need to download [ntfy](https://ntfy.sh/) an
 
 `--create-config`: Force creation of a new configuration file.
 
+`-p`, `--priority <1-5>`: Set the notification priority.
+
+`-t`, `--tags <tag>`: Set the notification tags.
+
 ## Configuration
 
 Configuration is stored in `$HOME/.config/notisend/notisend.conf`
@@ -46,7 +50,7 @@ If the file does not exist, it will be created interactively when running a comm
 
 `LOGS_TO_KEEP`: Amount of log files to keep
 
-> Check ntfy documentation for [tags](https://docs.ntfy.sh/emojis/) and [priorities](https://docs.ntfy.sh/subscribe/phone/?h=priority#message-priority)
+> Check ntfy documentation for [tags](https://docs.ntfy.sh/emojis/) and [priorities](https://docs.ntfy.sh/publish/#message-priority)
 
 ## Logs
 
@@ -58,7 +62,7 @@ By default, 5 log files are stored. Check the configuration file for `LOGS_TO_KE
 
 `notisend sleep 5`
 
-`notisend ./my_script.sh --arg1 value1`
+`notisend -p 4 -t "computer" yay -Syu`
 
 `notisend -c`
 
@@ -69,7 +73,7 @@ By default, 5 log files are stored. Check the configuration file for `LOGS_TO_KE
 ### Using cURL
 
 ```sh
-curl -Lo "~/.local/bin/notisend" https://raw.githubusercontent.com/Virkkunen/notisend/refs/heads/master/bin/notisend
+curl -LJO "~/.local/bin/notisend" https://raw.githubusercontent.com/Virkkunen/notisend/refs/heads/master/bin/notisend
 chmod +x ~/.local/bin/notisend
 ```
 
