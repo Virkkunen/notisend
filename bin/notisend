@@ -26,10 +26,12 @@ Usage:  notisend [options] <command> [command arguments]
 Sends a notification via ntfy after a command completes
 
 Options:
-  -h, --help        Show this help message.
-  -v, --version     Show the version information.
-  -c, --config      Show the current configuration.
-  --create-config   Force creation of a new configuration file.
+  -h, --help              Show this help message.
+  -v, --version           Show the version information.
+  -c, --config            Show the current configuration.
+  --create-config         Force creation of a new configuration file.
+  -p, --priority <1-5>    Set the notification priority.
+  -t, --tags <tag>        Set the notification tags.
 
 Configuration:
   Configuration is stored in $CONFIG_FILE
@@ -43,7 +45,7 @@ Logs:
 
 Examples:
   notisend sleep 5
-  notisend ./my_script.sh --arg1 value1
+  notisend -p 4 -t "computer" yay -Syu
   notisend -c
   notisend --create-config
 EOF
