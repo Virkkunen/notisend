@@ -3,7 +3,7 @@
 # source "$HOME/.aliases"
 
 # --- Metadata ---
-VERSION="1.1.4"
+VERSION="1.1.5"
 COPYRIGHT="Copyright (c) 2025 Virkkunen.  All rights reserved."
 LICENSE="Apache-2.0 License"
 
@@ -166,9 +166,8 @@ show_config() {
 # --- Wrapped Command ---
 run_command() {
   temp_log=$(mktemp "$CONFIG_HOME"/notisend.XXXXXXXX)
-  # command group to correctly capture the exit code
-  { "${COMMAND[@]}" 2>&1 | tee "$temp_log"; }
-  EXIT_CODE=$?
+  "${COMMAND[@]}" 2>&1 | tee "$temp_log"
+  EXIT_CODE="${PIPESTATUS[0]}" # get the exit code from the command instead of tee
   DESC=$(tail -n "$DESC_SIZE" "$temp_log" | sed 's/\x1b\[[0-9;]*m//g') # sed to remove escape codes
   check_exit_code
 }
