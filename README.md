@@ -90,3 +90,8 @@ chmod +x ~/.local/bin/notisend
 - Extract the script
 - Move to `~/.local/bin`, `/usr/local/bin` or `/usr/bin`
 - Make the file executable with `chmod +x notisend`
+
+# TODO
+- [ ] User aliases
+- [ ] Colour output
+- [ ] `-p` amd `-t` flags
