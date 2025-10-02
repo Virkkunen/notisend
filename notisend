@@ -58,7 +58,7 @@ EOF
 
 # --- Functions ---
 check_dependencies() {
-  if ! command -v curl &> /dev/null; then
+  if ! command -v curl &>/dev/null; then
     echo "${RED}${BOLD}Error:${RESET} ${RED}curl is not installed${RESET}" >&2
     exit 1
   fi
@@ -153,26 +153,55 @@ EOF
   exit 0
 }
 
+show_config() {
+  sed 's/#[^"]*$//' "$config_file" | sed '/^$/d'
+  exit 0
+}
+
 show_version() {
   echo -e "${GREEN}${BOLD}[notisend]${RESET} version $VERSION"
   exit 0
 }
 
+show_args() {
+  echo "$1"
+}
+
 # --- Argument Parsing ---
 args=()
+priority_set=0
+emoji_set=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
   -h | --help) usage ;;
   -v | --version) show_version ;;
   -s | --show-config) show_config ;;
   --create-config) create_config ;;
+  -e | --emojis)
+    if [[ $emoji_set -eq 1 ]]; then
+      echo "${RED}${BOLD}Error:${RESET} ${RED}Duplicate flag: -e/--emojis${RESET}" >&2
+      exit 1
+    fi
+    shift
+    emoji_set=1
+    show_args "$1"
+    ;;
+  -p | --priority)
+    if [[ $priority_set -eq 1 ]]; then
+      echo "${RED}${BOLD}Error:${RESET} ${RED}Duplicate flag: -p/--priority${RESET}" >&2
+      exit 1
+    fi
+    shift
+    priority_set=1
+    show_args "$1"
+    ;;
   --)
     shift
     COMMAND+=("$@")
     break
     ;;
   -*)
-    echo -e "${text[bold]}${text[red]}Invalid option: $1${text[reset]}" >&2
+    echo -e "${RED}${BOLD}Invalid option: $1${RESET}" >&2
     usage
     exit 1
     ;;
