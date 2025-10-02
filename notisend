@@ -163,14 +163,35 @@ show_version() {
   exit 0
 }
 
-show_args() {
-  echo "$1"
+set_tags() {
+  SUCCESS_TAGS="$1"
+  ERROR_TAGS="$1"
+  echo $SUCCESS_TAGS
+}
+
+set_topic() {
+ TOPIC="$1"
+ echo "$TOPIC"
+}
+
+set_priority() {
+  SUCCESS_PRIO="$1"
+  ERROR_PRIO="$1"
+  echo $SUCCESS_PRIO
+}
+
+set_host() {
+  HOST="$1"
+  echo "$HOST"
 }
 
 # --- Argument Parsing ---
 args=()
-priority_set=0
 emoji_set=0
+priority_set=0
+topic_set=0
+host_set=0
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
   -h | --help) usage ;;
@@ -178,22 +199,40 @@ while [[ $# -gt 0 ]]; do
   -s | --show-config) show_config ;;
   --create-config) create_config ;;
   -e | --emojis)
-    if [[ $emoji_set -eq 1 ]]; then
-      echo "${RED}${BOLD}Error:${RESET} ${RED}Duplicate flag: -e/--emojis${RESET}" >&2
+    if [[ $emoji_set -gt 0 ]]; then
+      echo "${RED}${BOLD}Error:${RESET} ${RED}Duplicate flags: -e | --emojis${RESET}" >&2
       exit 1
     fi
     shift
     emoji_set=1
-    show_args "$1"
+    set_tags "$1"
     ;;
   -p | --priority)
-    if [[ $priority_set -eq 1 ]]; then
-      echo "${RED}${BOLD}Error:${RESET} ${RED}Duplicate flag: -p/--priority${RESET}" >&2
+    if [[ $priority_set -gt 0 ]]; then
+      echo "${RED}${BOLD}Error:${RESET} ${RED}Duplicate flags: -p | --priority${RESET}" >&2
       exit 1
     fi
     shift
     priority_set=1
-    show_args "$1"
+    set_priority "$1"
+    ;;
+  -t | --topic)
+    if [[ $topic_set -gt 0 ]]; then
+      echo "${RED}${BOLD}Error:${RESET} ${RED}Duplicate flags: -t | --topic${RESET}" >&2
+      exit 1
+    fi
+    shift
+    topic_set=1
+    set_topic "$1"
+    ;;
+  -o | --host)
+    if [[ $host_set -gt 0 ]]; then
+      echo "${RED}${BOLD}Error:${RESET} ${RED}Duplicate flags: -o | --host${RESET}" >&2
+      exit 1
+    fi
+    shift
+    host_set=1
+    set_host "$1"
     ;;
   --)
     shift
