@@ -1,0 +1,185 @@
+#!/usr/bin/env bash
+
+# --- Metadata ---
+VERSION="2.0.0"
+COPYRIGHT="Copyright (c) 2025 Virkkunen. All rights reserved."
+LICENSE="Apache-2.0 License"
+
+config_file="$HOME/.config/notisend.conf"
+declare -A defaultConfig=(
+  [TITLE]=""
+  [HOST]="ntfy.sh"
+  [TOPIC]=""
+  [DESC_SIZE]="10"
+  [SUCCESS_TAGS]="white_check_mark"
+  [SUCCESS_PRIO]="3"
+  [ERROR_TAGS]="x"
+  [ERROR_PRIO]="4"
+)
+
+# Colors
+RED=$(tput setaf 1)
+GREEN=$(tput setaf 2)
+BLUE=$(tput setaf 4)
+ORANGE=$(tput setaf 208)
+GREY=$(tput setaf 8)
+YELLOW=$(tput setaf 3)
+PURPLE=$(tput setaf 5)
+BOLD=$(tput bold)
+RESET=$(tput sgr0)
+
+# --- Usage ---
+usage() {
+  cat <<EOF
+${GREEN}Usage:${RESET} notisend [options] <command> [command arguments]
+
+Sends a notification via ntfy after a command completes
+
+${GREEN}Options:${RESET}
+  ${BLUE}-h${RESET}, ${BLUE}--help${RESET}                   Show this help message.
+  ${BLUE}-v${RESET}, ${BLUE}--version${RESET}                Show the version information.
+  ${BLUE}-s${RESET}, ${BLUE}--show-config${RESET}            Show the current configuration.
+  ${BLUE}--create-config${RESET}              Force creation of a new configuration file.
+  ${BLUE}-p${RESET}, ${BLUE}--priority ${PURPLE}<1-5>${RESET}         Set the notification priority.
+  ${BLUE}-e${RESET}, ${BLUE}--emojis ${PURPLE}<tag>${RESET}           Set the notification tags.
+
+${GREEN}Configuration:${RESET}
+  Configuration is stored in ${YELLOW}$config_file${RESET}
+  If the file does not exist, it will be created interactively 
+  when running a command, or you can use --create-config
+
+${GREEN}Examples:${RESET}
+  notisend echo "this should work"
+  notisend -p 4 --emojis "computer,warning" yay -Syu
+  notisend --create-config
+EOF
+  exit 0
+}
+
+# --- Functions ---
+check_config() {
+  local missing_values=0
+
+  if [[ ! -f "$config_file" ]]; then
+    echo -e "${ORANGE}Config file not found. Creating a new one...${RESET}\n"
+    create_config
+  fi
+
+  source "$config_file"
+
+  if [[ -z "$HOST" ]]; then
+    echo "${RED}${BOLD}Error:${RESET} ${RED}HOST is missing in config file${RESET}" >&2
+    missing_values+=1
+  fi
+
+  if [[ -z "$TOPIC" ]]; then
+    echo "${RED}${BOLD}Error:${RESET} ${RED}TOPIC is missing in config file${RESET}" >&2
+    missing_values+=1
+  fi
+
+  [[ "$missing_values" -gt 0 ]] && exit 1
+}
+
+create_config() {
+  local config_dir=$(dirname "$config_file")
+  mkdir -p "$config_dir"
+  >"$config_file"
+
+  local var value
+  for var in TITLE HOST TOPIC DESC_SIZE; do
+    case $var in
+    TITLE)
+      echo -e "${BOLD}${GREEN}Enter the default title for notifications ${RESET}(or press Enter to use the wrapped command as a title):"
+      ;;
+    HOST)
+      echo -e "${BOLD}${GREEN}Enter the default ntfy host ${RESET}(or press Enter to use ntfy.sh)"
+      ;;
+    TOPIC)
+      echo -e "${BOLD}${GREEN}Enter the topic:${RESET}"
+      echo -e "${GREY}Topics don't have to explicitly be created, you can define one now and check it later on https://your-host/your-topic${RESET}"
+      ;;
+    DESC_SIZE)
+      echo -e "${BOLD}${GREEN}Enter the default description size ${RESET}(or press Enter for 10 lines):"
+      echo -e "${GREY}This is the amount of lines from the wrapped command's output to use as a description for the notification${RESET}"
+      ;;
+    esac
+
+    while true; do
+      read -r -p "> " value
+      case $var in
+      TOPIC)
+        [[ -z "$value" ]] && echo -e "${BOLD}${RED}Please provide a topic.\n${RESET}" || break
+        ;;
+      DESC_SIZE)
+        [[ -z "$value" ]] && {
+          value=10
+          break
+        }
+        [[ "$value" =~ ^[0-9]+$ ]] && break || echo -e "${BOLD}${RED}Enter a positive number.${RESET}"
+        ;;
+      *)
+        break
+        ;;
+      esac
+    done
+
+    echo "${var}=\"${value:-${defaultConfig[$var]}}\"" >>"$config_file"
+    echo ""
+  done
+
+  cat <<EOF >>"$config_file"
+SUCCESS_TAGS="${defaultConfig[SUCCESS_TAGS]}"
+SUCCESS_PRIO="${defaultConfig[SUCCESS_PRIO]}"
+ERROR_TAGS="${defaultConfig[ERROR_TAGS]}"
+ERROR_PRIO="${defaultConfig[ERROR_PRIO]}"
+EOF
+
+  echo -e "\n${GREEN}Config created at $config_file${RESET}"
+  exit 0
+}
+
+show_version() {
+  echo -e "${GREEN}${BOLD}[notisend]${RESET} version $VERSION"
+  exit 0
+}
+
+# --- Argument Parsing ---
+args=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+  -h | --help) usage ;;
+  -v | --version) show_version ;;
+  -s | --show-config) show_config ;;
+  --create-config) create_config ;;
+  --)
+    shift
+    COMMAND+=("$@")
+    break
+    ;;
+  -*)
+    echo -e "${text[bold]}${text[red]}Invalid option: $1${text[reset]}" >&2
+    usage
+    exit 1
+    ;;
+  *)
+    COMMAND+=("$@")
+    break
+    ;;
+  esac
+  shift
+done
+
+# --- Main execution ---
+
+# Check if any arguments were provided
+[[ ${#COMMAND[@]} -eq 0 ]] && {
+  check_config
+  echo -e "${RED}${BOLD}Error:${RESET} No command provided.\n" >&2
+  usage
+  exit 1
+}
+
+check_config
+parse_command
+
+exit 0
