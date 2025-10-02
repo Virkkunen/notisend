@@ -73,18 +73,25 @@ check_dependencies() {
 }
 
 check_config() {
-  if [[ $host_set -eq 1 ]] && [[ $topic_set -eq 1 ]]; then
-    return
-  fi
-
   local missing_values=0
 
-  if [[ ! -f "$config_file" ]]; then
+  if [[ -f "$config_file" ]]; then
+    source "$config_file"
+  elif [[ $host_set -eq 0 ]] || [[ $topic_set -eq 0 ]]; then
     echo -e "${ORANGE}Config file not found. Creating a new one...${RESET}\n"
     create_config
   fi
 
-  source "$config_file"
+  [[ $host_set -eq 1 ]] && HOST="$flag_host"
+  [[ $topic_set -eq 1 ]] && TOPIC="$flag_topic"
+  [[ $priority_set -eq 1 ]] && {
+    SUCCESS_PRIO="$flag_priority"
+    ERROR_PRIO="$flag_priority"
+  }
+  [[ $emoji_set -eq 1 ]] && {
+    SUCCESS_TAGS="$flag_tags"
+    ERROR_TAGS="$flag_tags"
+  }
 
   if [[ $host_set -eq 0 ]] && [[ -z "$HOST" ]]; then
     echo "${RED}${BOLD}Error:${RESET} ${RED}HOST is missing in config file${RESET}" >&2
@@ -164,29 +171,32 @@ show_config() {
 
 show_version() {
   echo -e "${GREEN}${BOLD}[notisend]${RESET} version $VERSION"
+  echo -e "Topic: $TOPIC\nTags: $SUCCESS_TAGS\nHost: $HOST\nPrio: $ERROR_PRIO"
   exit 0
 }
 
 set_tags() {
-  SUCCESS_TAGS="$1"
-  ERROR_TAGS="$1"
-  echo $SUCCESS_TAGS
+  flag_tags="$1"
 }
 
 set_topic() {
- TOPIC="$1"
- echo "$TOPIC"
+  flag_topic="$1"
 }
 
 set_priority() {
-  SUCCESS_PRIO="$1"
-  ERROR_PRIO="$1"
-  echo $SUCCESS_PRIO
+  flag_priority="$1"
 }
 
 set_host() {
-  HOST="$1"
-  echo "$HOST"
+  flag_host="$1"
+}
+
+run_command() {
+  temp_log=$(mktemp temp/notisend.XXXXXXXX)
+  "${COMMAND[@]}" 2>&1 | tee "$temp_log"
+  EXIT_CODE="${PIPESTATUS[0]}"                                         # get the exit code from the command instead of tee
+  DESC=$(tail -n "$DESC_SIZE" "$temp_log" | sed 's/\x1b\[[0-9;]*m//g') # sed to remove escape codes
+  check_exit_code
 }
 
 # --- Argument Parsing ---
