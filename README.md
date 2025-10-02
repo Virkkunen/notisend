@@ -1,5 +1,7 @@
 # notisend
 
+![](resources/ns.png)
+
 A wrapper to send command outputs as a notification to ntfy
 
 ![](resources/01.jpeg)
