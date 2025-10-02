@@ -1,0 +1,342 @@
+#!/usr/bin/env bash
+
+# --- Metadata ---
+VERSION="2.0.0"
+COPYRIGHT="Copyright (c) 2025 Virkkunen. All rights reserved."
+LICENSE="Apache-2.0 License"
+
+config_file="$HOME/.config/notisend.conf"
+declare -A default_config=(
+  [TITLE]=""
+  [HOST]="ntfy.sh"
+  [TOPIC]=""
+  [DESC_SIZE]="10"
+  [SUCCESS_TAGS]="white_check_mark"
+  [SUCCESS_PRIO]="3"
+  [ERROR_TAGS]="x"
+  [ERROR_PRIO]="4"
+)
+
+# Colors
+RED=$(tput setaf 1)
+GREEN=$(tput setaf 2)
+BLUE=$(tput setaf 4)
+ORANGE=$(tput setaf 208)
+GREY=$(tput setaf 8)
+YELLOW=$(tput setaf 3)
+PURPLE=$(tput setaf 5)
+BOLD=$(tput bold)
+RESET=$(tput sgr0)
+
+# --- Usage ---
+usage() {
+  cat <<EOF
+${GREEN}${BOLD}❯[notisend] ${RESET}${VERSION}
+
+${GREEN}Usage:${RESET} notisend [options] <command> [command arguments]
+
+Sends a notification via ntfy after a command completes
+
+${GREEN}Options:${RESET}
+  ${BLUE}-h${RESET}, ${BLUE}--help${RESET}                   Show this help message.
+  ${BLUE}-v${RESET}, ${BLUE}--version${RESET}                Show the version information.
+  ${BLUE}-s${RESET}, ${BLUE}--show-config${RESET}            Show the current configuration.
+  ${BLUE}--create-config${RESET}              Force creation of a new configuration file.
+  ${BLUE}-p${RESET}, ${BLUE}--priority ${PURPLE}<1-5>${RESET}         Set the notification priority.
+  ${BLUE}-e${RESET}, ${BLUE}--emojis ${PURPLE}<tag>${RESET}           Set the notification tags.
+
+${GREEN}Configuration:${RESET}
+  Configuration is stored in ${YELLOW}$config_file${RESET}
+  If the file does not exist, it will be created interactively 
+  when running a command, or you can use --create-config
+
+${GREEN}Examples:${RESET}
+  notisend echo "this should work"
+  notisend -p 4 --emojis "computer,warning" yay -Syu
+  notisend --create-config
+EOF
+  exit 0
+}
+
+# --- Functions ---
+check_dependencies() {
+  # check if curl is installed
+  if ! command -v curl &>/dev/null; then
+    echo "${RED}${BOLD}Error:${RESET} ${RED}curl is not installed${RESET}" >&2
+    exit 1
+  fi
+
+  # curl needs to be >= 8.x.x
+  local curl_version=$(curl --version | head -n1 | awk '{print $2}')
+  local major_version=$(echo "$curl_version" | cut -d. -f1)
+
+  if [[ "$major_version" -lt 8 ]]; then
+    echo "${RED}${BOLD}Error:${RESET} ${RED}curl version $curl_version is older than 8."
+    exit 1
+  fi
+}
+
+check_config() {
+  local missing_values=0
+
+  # source the config first
+  if [[ -f "$config_file" ]]; then
+    source "$config_file"
+  # if -o and -t aren't provided, run wizard
+  elif [[ $host_set -eq 0 ]] || [[ $topic_set -eq 0 ]]; then
+    echo -e "${ORANGE}Config file not found. Creating a new one...${RESET}\n"
+    create_config
+  fi
+
+  # flag overrides, otherwise use config
+  [[ $host_set -eq 1 ]] && HOST="$flag_host"
+  [[ $topic_set -eq 1 ]] && TOPIC="$flag_topic"
+  [[ $priority_set -eq 1 ]] && {
+    SUCCESS_PRIO="$flag_priority"
+    ERROR_PRIO="$flag_priority"
+  }
+  [[ $emoji_set -eq 1 ]] && {
+    SUCCESS_TAGS="$flag_tags"
+    ERROR_TAGS="$flag_tags"
+  }
+
+  # error if no host is set
+  if [[ $host_set -eq 0 ]] && [[ -z "$HOST" ]]; then
+    echo "${RED}${BOLD}Error:${RESET} ${RED}HOST is missing in config file${RESET}" >&2
+    missing_values+=1
+  fi
+
+  # error if no topic is set
+  if [[ $topic_set -eq 0 ]] && [[ -z "$TOPIC" ]]; then
+    echo "${RED}${BOLD}Error:${RESET} ${RED}TOPIC is missing in config file${RESET}" >&2
+    missing_values+=1
+  fi
+
+  [[ "$missing_values" -gt 0 ]] && exit 1
+}
+
+create_config() {
+  local config_dir=$(dirname "$config_file")
+  mkdir -p "$config_dir"
+  >"$config_file"
+
+  local var value
+  for var in TITLE HOST TOPIC DESC_SIZE; do
+    case $var in
+    TITLE)
+      echo -e "${BOLD}${GREEN}Enter the default title for notifications ${RESET}(or press Enter to use the wrapped command as a title):"
+      ;;
+    HOST)
+      echo -e "${BOLD}${GREEN}Enter the default ntfy host ${RESET}(or press Enter to use ntfy.sh)"
+      ;;
+    TOPIC)
+      echo -e "${BOLD}${GREEN}Enter the topic:${RESET}"
+      echo -e "${GREY}Topics don't have to explicitly be created, you can define one now and check it later on https://your-host/your-topic${RESET}"
+      ;;
+    DESC_SIZE)
+      echo -e "${BOLD}${GREEN}Enter the default description size ${RESET}(or press Enter for 10 lines):"
+      echo -e "${GREY}This is the amount of lines from the wrapped command's output to use as a description for the notification${RESET}"
+      ;;
+    esac
+
+    while true; do
+      read -r -p "> " value
+      case $var in
+      TOPIC)
+        [[ -z "$value" ]] && echo -e "${BOLD}${RED}Please provide a topic.\n${RESET}" || break
+        ;;
+      DESC_SIZE)
+        [[ -z "$value" ]] && {
+          value=10
+          break
+        }
+        [[ "$value" =~ ^[0-9]+$ ]] && break || echo -e "${BOLD}${RED}Enter a positive number.${RESET}"
+        ;;
+      *)
+        break
+        ;;
+      esac
+    done
+
+    echo "${var}=\"${value:-${default_config[$var]}}\"" >>"$config_file"
+    echo ""
+  done
+
+  cat <<EOF >>"$config_file"
+SUCCESS_TAGS="${default_config[SUCCESS_TAGS]}"
+SUCCESS_PRIO="${default_config[SUCCESS_PRIO]}"
+ERROR_TAGS="${default_config[ERROR_TAGS]}"
+ERROR_PRIO="${default_config[ERROR_PRIO]}"
+EOF
+
+  echo -e "\n${GREEN}Config created at $config_file${RESET}"
+  exit 0
+}
+
+show_config() {
+  sed 's/#[^"]*$//' "$config_file" | sed '/^$/d'
+  exit 0
+}
+
+show_version() {
+  echo -e "${GREEN}${BOLD}[notisend]${RESET} version $VERSION"
+  echo -e "Topic: $TOPIC\nTags: $SUCCESS_TAGS\nHost: $HOST\nPrio: $ERROR_PRIO"
+  exit 0
+}
+
+set_tags() {
+  flag_tags="$1"
+}
+
+set_topic() {
+  flag_topic="$1"
+}
+
+set_priority() {
+  flag_priority="$1"
+}
+
+set_host() {
+  flag_host="$1"
+}
+
+run_command() {
+  # command output is piped to this file
+  mkdir -p /tmp/notisend
+  temp_log=$(mktemp /tmp/notisend/notisend.XXXXXXXX)
+
+  # run the command array and tee temp_log
+  "${COMMAND[@]}" 2>&1 | tee "$temp_log"
+  # get the exit code from the command instead of tee
+  EXIT_CODE="${PIPESTATUS[0]}"
+
+  # get last N lines for description, removing escape codes
+  DESC=$(tail -n "$DESC_SIZE" "$temp_log" | sed 's/\x1b\[[0-9;]*m//g')
+
+  # cleanup
+  rm -f "$temp_log"
+
+  if [[ $EXIT_CODE -eq 0 ]]; then
+    send_notification "success"
+  else
+    send_notification "error"
+  fi
+}
+
+send_notification() {
+  local status="$1"
+  local tags priority
+
+  # from the command's exit code
+  if [[ "$status" == "success" ]]; then
+    tags="$SUCCESS_TAGS"
+    priority="$SUCCESS_PRIO"
+  else
+    tags="$ERROR_TAGS"
+    priority="$ERROR_PRIO"
+  fi
+
+  # set title to command if TITLE is empty
+  local title="${TITLE:-${COMMAND[*]}}"
+
+  # to parse curl response and 
+  local response
+  response=$(curl -s -w "\n%{http_code}" \
+    -H "Title: $title" \
+    -H "Priority: $priority" \
+    -H "Tags: $tags" \
+    -d "$DESC" \
+    "https://$HOST/$TOPIC")
+
+  local http_code=$(echo "$response" | tail -n1)
+
+  if [[ "$http_code" -ge 200 ]] && [[ "$http_code" -lt 300 ]]; then
+    echo -e "\n${GREEN}${BOLD}❯[notisend]:${RESET} notification sent"
+  else
+    echo -e "\n${RED}${BOLD}❯[notisend]:${RESET} ${RED}failed to send notification${RESET}" >&2
+    echo "$response" >&2
+  fi
+}
+
+# --- Argument Parsing ---
+args=()
+emoji_set=0
+priority_set=0
+topic_set=0
+host_set=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+  -h | --help) usage ;;
+  -v | --version) show_version ;;
+  -s | --show-config) show_config ;;
+  --create-config) create_config ;;
+  -e | --emojis)
+    if [[ $emoji_set -gt 0 ]]; then
+      echo "${RED}${BOLD}Error:${RESET} ${RED}Duplicate flags: -e | --emojis${RESET}" >&2
+      exit 1
+    fi
+    shift
+    emoji_set=1
+    set_tags "$1"
+    ;;
+  -p | --priority)
+    if [[ $priority_set -gt 0 ]]; then
+      echo "${RED}${BOLD}Error:${RESET} ${RED}Duplicate flags: -p | --priority${RESET}" >&2
+      exit 1
+    fi
+    shift
+    priority_set=1
+    set_priority "$1"
+    ;;
+  -t | --topic)
+    if [[ $topic_set -gt 0 ]]; then
+      echo "${RED}${BOLD}Error:${RESET} ${RED}Duplicate flags: -t | --topic${RESET}" >&2
+      exit 1
+    fi
+    shift
+    topic_set=1
+    set_topic "$1"
+    ;;
+  -o | --host)
+    if [[ $host_set -gt 0 ]]; then
+      echo "${RED}${BOLD}Error:${RESET} ${RED}Duplicate flags: -o | --host${RESET}" >&2
+      exit 1
+    fi
+    shift
+    host_set=1
+    set_host "$1"
+    ;;
+  --)
+    shift
+    COMMAND+=("$@")
+    break
+    ;;
+  -*)
+    echo -e "${RED}${BOLD}Invalid option: $1${RESET}" >&2
+    usage
+    exit 1
+    ;;
+  *)
+    COMMAND+=("$@")
+    break
+    ;;
+  esac
+  shift
+done
+
+# --- Main execution ---
+
+# Check if any arguments were provided
+[[ ${#COMMAND[@]} -eq 0 ]] && {
+  check_config
+  echo -e "${RED}${BOLD}Error:${RESET} No command provided.\n" >&2
+  usage
+  exit 1
+}
+
+check_dependencies
+check_config
+run_command
+
+exit "$EXIT_CODE"
