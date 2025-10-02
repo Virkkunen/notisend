@@ -56,14 +56,14 @@ Check the [example config](example_config.conf) for details.
 ### Using cURL
 
 ```sh
-
+curl -fsSL https://github.com/Virkkunen/notisend/releases/latest/download/notisend -o ~/.local/bin/notisend
 chmod +x ~/.local/bin/notisend
 ```
 
 ### Using wget
 
 ```sh
-
+wget -qO ~/.local/bin/notisend https://github.com/Virkkunen/notisend/releases/latest/download/notisend
 chmod +x ~/.local/bin/notisend
 ```
 
