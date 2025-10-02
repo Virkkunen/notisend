@@ -58,12 +58,14 @@ EOF
 
 # --- Functions ---
 check_dependencies() {
+  # check if curl is installed
   if ! command -v curl &>/dev/null; then
     echo "${RED}${BOLD}Error:${RESET} ${RED}curl is not installed${RESET}" >&2
     exit 1
   fi
 
-  local curl_version=$(curl --version | head -n1 | awk 'print $2')
+  # curl needs to be >= 8.x.x
+  local curl_version=$(curl --version | head -n1 | awk '{print $2}')
   local major_version=$(echo "$curl_version" | cut -d. -f1)
 
   if [[ "$major_version" -lt 8 ]]; then
@@ -75,13 +77,16 @@ check_dependencies() {
 check_config() {
   local missing_values=0
 
+  # source the config first
   if [[ -f "$config_file" ]]; then
     source "$config_file"
+  # if -o and -t aren't provided, run wizard
   elif [[ $host_set -eq 0 ]] || [[ $topic_set -eq 0 ]]; then
     echo -e "${ORANGE}Config file not found. Creating a new one...${RESET}\n"
     create_config
   fi
 
+  # flag overrides, otherwise use config
   [[ $host_set -eq 1 ]] && HOST="$flag_host"
   [[ $topic_set -eq 1 ]] && TOPIC="$flag_topic"
   [[ $priority_set -eq 1 ]] && {
@@ -93,11 +98,13 @@ check_config() {
     ERROR_TAGS="$flag_tags"
   }
 
+  # error if no host is set
   if [[ $host_set -eq 0 ]] && [[ -z "$HOST" ]]; then
     echo "${RED}${BOLD}Error:${RESET} ${RED}HOST is missing in config file${RESET}" >&2
     missing_values+=1
   fi
 
+  # error if no topic is set
   if [[ $topic_set -eq 0 ]] && [[ -z "$TOPIC" ]]; then
     echo "${RED}${BOLD}Error:${RESET} ${RED}TOPIC is missing in config file${RESET}" >&2
     missing_values+=1
@@ -192,11 +199,61 @@ set_host() {
 }
 
 run_command() {
-  temp_log=$(mktemp temp/notisend.XXXXXXXX)
+  # command output is piped to this file
+  mkdir -p /tmp/notisend
+  temp_log=$(mktemp /tmp/notisend/notisend.XXXXXXXX)
+
+  # run the command array and tee temp_log
   "${COMMAND[@]}" 2>&1 | tee "$temp_log"
-  EXIT_CODE="${PIPESTATUS[0]}"                                         # get the exit code from the command instead of tee
-  DESC=$(tail -n "$DESC_SIZE" "$temp_log" | sed 's/\x1b\[[0-9;]*m//g') # sed to remove escape codes
-  check_exit_code
+  # get the exit code from the command instead of tee
+  EXIT_CODE="${PIPESTATUS[0]}"
+
+  # get last N lines for description, removing escape codes
+  DESC=$(tail -n "$DESC_SIZE" "$temp_log" | sed 's/\x1b\[[0-9;]*m//g')
+
+  # cleanup
+  rm -f "$temp_log"
+
+  if [[ $EXIT_CODE -eq 0 ]]; then
+    send_notification "success"
+  else
+    send_notification "error"
+  fi
+}
+
+send_notification() {
+  local status="$1"
+  local tags priority
+
+  # from the command's exit code
+  if [[ "$status" == "success" ]]; then
+    tags="$SUCCESS_TAGS"
+    priority="$SUCCESS_PRIO"
+  else
+    tags="$ERROR_TAGS"
+    priority="$ERROR_PRIO"
+  fi
+
+  # set title to command if TITLE is empty
+  local title="${TITLE:-${COMMAND[*]}}"
+
+  # to parse curl response and 
+  local response
+  response=$(curl -s -w "\n%{http_code}" \
+    -H "Title: $title" \
+    -H "Priority: $priority" \
+    -H "Tags: $tags" \
+    -d "$DESC" \
+    "https://$HOST/$TOPIC")
+
+  local http_code=$(echo "$response" | tail -n1)
+
+  if [[ "$http_code" -ge 200 ]] && [[ "$http_code" -lt 300 ]]; then
+    echo -e "\n${GREEN}${BOLD}❯[notisend]:${RESET} notification sent"
+  else
+    echo -e "\n${RED}${BOLD}❯[notisend]:${RESET} ${RED}failed to send notification${RESET}" >&2
+    echo "$response" >&2
+  fi
 }
 
 # --- Argument Parsing ---
@@ -278,6 +335,6 @@ done
 
 check_dependencies
 check_config
-parse_command
+run_command
 
-exit 0
+exit "$EXIT_CODE"
