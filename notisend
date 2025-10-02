@@ -73,6 +73,10 @@ check_dependencies() {
 }
 
 check_config() {
+  if [[ $host_set -eq 1 ]] && [[ $topic_set -eq 1 ]]; then
+    return
+  fi
+
   local missing_values=0
 
   if [[ ! -f "$config_file" ]]; then
@@ -82,12 +86,12 @@ check_config() {
 
   source "$config_file"
 
-  if [[ -z "$HOST" ]]; then
+  if [[ $host_set -eq 0 ]] && [[ -z "$HOST" ]]; then
     echo "${RED}${BOLD}Error:${RESET} ${RED}HOST is missing in config file${RESET}" >&2
     missing_values+=1
   fi
 
-  if [[ -z "$TOPIC" ]]; then
+  if [[ $topic_set -eq 0 ]] && [[ -z "$TOPIC" ]]; then
     echo "${RED}${BOLD}Error:${RESET} ${RED}TOPIC is missing in config file${RESET}" >&2
     missing_values+=1
   fi
