@@ -6,7 +6,7 @@ COPYRIGHT="Copyright (c) 2025 Virkkunen. All rights reserved."
 LICENSE="Apache-2.0 License"
 
 config_file="$HOME/.config/notisend.conf"
-declare -A defaultConfig=(
+declare -A default_config=(
   [TITLE]=""
   [HOST]="ntfy.sh"
   [TOPIC]=""
@@ -57,6 +57,21 @@ EOF
 }
 
 # --- Functions ---
+check_dependencies() {
+  if ! command -v curl &> /dev/null; then
+    echo "${RED}${BOLD}Error:${RESET} ${RED}curl is not installed${RESET}" >&2
+    exit 1
+  fi
+
+  local curl_version=$(curl --version | head -n1 | awk 'print $2')
+  local major_version=$(echo "$curl_version" | cut -d. -f1)
+
+  if [[ "$major_version" -lt 8 ]]; then
+    echo "${RED}${BOLD}Error:${RESET} ${RED}curl version $curl_version is older than 8."
+    exit 1
+  fi
+}
+
 check_config() {
   local missing_values=0
 
@@ -123,15 +138,15 @@ create_config() {
       esac
     done
 
-    echo "${var}=\"${value:-${defaultConfig[$var]}}\"" >>"$config_file"
+    echo "${var}=\"${value:-${default_config[$var]}}\"" >>"$config_file"
     echo ""
   done
 
   cat <<EOF >>"$config_file"
-SUCCESS_TAGS="${defaultConfig[SUCCESS_TAGS]}"
-SUCCESS_PRIO="${defaultConfig[SUCCESS_PRIO]}"
-ERROR_TAGS="${defaultConfig[ERROR_TAGS]}"
-ERROR_PRIO="${defaultConfig[ERROR_PRIO]}"
+SUCCESS_TAGS="${default_config[SUCCESS_TAGS]}"
+SUCCESS_PRIO="${default_config[SUCCESS_PRIO]}"
+ERROR_TAGS="${default_config[ERROR_TAGS]}"
+ERROR_PRIO="${default_config[ERROR_PRIO]}"
 EOF
 
   echo -e "\n${GREEN}Config created at $config_file${RESET}"
@@ -179,6 +194,7 @@ done
   exit 1
 }
 
+check_dependencies
 check_config
 parse_command
 
